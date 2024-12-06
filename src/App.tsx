@@ -1,64 +1,72 @@
-import React, { useState } from 'react';
-import { BrowserRouter as Router, Route, Routes } from 'react-router-dom';
-import PropertyList from './components/PropertyList';
-import PropertyDetail from './components/PropertyDetail';
-import ListProperty from './components/ListProperty';
-import NavigationBar from './components/NavigationBar';
-import { Container, Typography } from '@mui/material';
+import { useEffect, useState } from "react";
+import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
+import { useConnectUI, useIsConnected, useWallet } from "@fuels/react";
+import { Toaster } from "react-hot-toast";
+import { AirbnbContract } from "./sway-api";
+import { PropertyInfo } from "./types";
+import { Navbar } from "./components/Navbar";
+import { HomePage } from "./pages/HomePage";
+import { ExplorePage } from "./pages/ExplorePage";
+import { ListPropertyPage } from "./pages/ListPropertyPage";
+import { PropertyDetailsPage } from "./pages/PropertyDetailsPage";
+import { ProfilePage } from "./pages/ProfilePage";
+import { ContractProvider } from "./context/ContractContext";
 
-const App: React.FC = () => {
-  const [connected, setConnected] = useState(false);
-  const [account, setAccount] = useState("");
- 
-  const connectWallet = async () => {
-    if (window.fuel) {
-        try {
-            await window.fuel.connect();
-            const accounts = await window.fuel.accounts();
-            if (accounts.length === 0) {
-                throw new Error('No accounts found.');
-            }
-            setAccount(accounts[0]);
-            setConnected(true);
-        } catch (err) {
-            console.error('error connecting: ', err);
-        }
-    } else {
-        console.error('Fuel wallet is not available');
+const CONTRACT_ID = import.meta.env.VITE_CONTRACT_ADDRESS;
+
+export default function App() {
+  const [contract, setContract] = useState<AirbnbContract>();
+  const { connect, isConnecting } = useConnectUI();
+  const { isConnected } = useIsConnected();
+  const { wallet } = useWallet();
+
+  useEffect(() => {
+    async function initializeContract() {
+      if (isConnected && wallet) {
+        const airbnbContract = new AirbnbContract(CONTRACT_ID, wallet);
+        setContract(airbnbContract);
+      }
     }
-  }
 
-    // Disconnect wallet logic
-  const disconnectWallet = () => {
-      setConnected(false);
-      setAccount("");
+    initializeContract();
+  }, [isConnected, wallet]);
+
+  if (!isConnected) {
+    return (
+      <Router>
+        <div className="h-screen w-screen flex flex-col bg-gray-50">
+          <Toaster position="top-right" />
+          <Navbar />
+          <div className="flex-1 flex items-center justify-center">
+            <button
+              onClick={connect}
+              className="bg-indigo-600 text-white px-6 py-3 rounded-lg hover:bg-indigo-700 transition-colors"
+            >
+              {isConnecting ? "Connecting..." : "Connect Wallet"}
+            </button>
+          </div>
+        </div>
+      </Router>
+    );
   }
 
   return (
     <Router>
-        <NavigationBar 
-            connected={connected} 
-            onConnect={connectWallet} 
-            onDisconnect={disconnectWallet} 
-        />
-        <Routes>
-            <Route path="/" element={
-                <Container maxWidth="md" style={{ textAlign: 'center', marginTop: '40px' }}>
-                    <Typography variant="h4" gutterBottom>
-                        Welcome to BlockStay
-                    </Typography>
-                    <Typography variant="subtitle1" gutterBottom>
-                        {connected ? `Connected as ${account}` : 'Connect your wallet to start'}
-                    </Typography>
-                    {/* ... other content ... */}
-                </Container>
-            } />
-            <Route path="/book" element={<PropertyList account={account}/>} />
-            <Route path="/list" element={<ListProperty account={account} />} />
-            <Route path="/property/:id" element={<PropertyDetail account={account} />} />
-        </Routes>
+      <ContractProvider contract={contract}>
+        <div className="h-screen w-screen flex flex-col bg-gray-50">
+          <Toaster position="top-right" />
+          <Navbar />
+          <main className="flex-1 overflow-y-auto">
+            <Routes>
+              <Route path="/" element={<HomePage />} />
+              <Route path="/explore" element={<ExplorePage />} />
+              <Route path="/list-property" element={<ListPropertyPage />} />
+              <Route path="/property/:id" element={<PropertyDetailsPage />} />
+              <Route path="/profile" element={<ProfilePage />} />
+            </Routes>
+          </main>
+        </div>
+      </ContractProvider>
     </Router>
-);
-};
-
-export default App;
+  );
+}
